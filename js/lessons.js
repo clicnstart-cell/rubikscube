@@ -56,6 +56,30 @@
     'y': 'Tout le cube à gauche', "y'": 'Tout le cube à droite', 'y2': 'Tout le cube 2 fois'
   };
 
+  // La même chose en phrase complète : affichée en grand pendant le geste et dite à voix haute.
+  var MOVE_SAY = {
+    'R': 'Tourne la colonne de droite vers le haut.',
+    "R'": 'Tourne la colonne de droite vers le bas.',
+    'R2': 'Tourne la colonne de droite 2 fois.',
+    'L': 'Tourne la colonne de gauche vers le bas.',
+    "L'": 'Tourne la colonne de gauche vers le haut.',
+    'L2': 'Tourne la colonne de gauche 2 fois.',
+    'U': 'Tourne la rangée du haut vers la gauche.',
+    "U'": 'Tourne la rangée du haut vers la droite.',
+    'U2': 'Tourne la rangée du haut 2 fois.',
+    'D': 'Tourne la rangée du bas vers la droite.',
+    "D'": 'Tourne la rangée du bas vers la gauche.',
+    'D2': 'Tourne la rangée du bas 2 fois.',
+    'F': 'Tourne la face de devant comme une horloge.',
+    "F'": 'Tourne la face de devant dans l’autre sens.',
+    'F2': 'Tourne la face de devant 2 fois.',
+    'y': 'Tourne tout le cube vers la gauche.',
+    "y'": 'Tourne tout le cube vers la droite.',
+    'y2': 'Tourne tout le cube 2 fois.'
+  };
+
+  var COLOR_NAMES = { white: 'blanc', yellow: 'jaune', green: 'vert', blue: 'bleu', red: 'rouge', orange: 'orange' };
+
   var LESSONS = [
     {
       id: 'decouvre',
@@ -422,11 +446,13 @@
       l.cases.forEach(function (c) { c.segments.forEach(function (s) { add(s.say); }); });
     });
     Object.keys(MESSAGES).forEach(function (k) { add(MESSAGES[k]); });
+    Object.keys(MOVE_SAY).forEach(function (k) { add(MOVE_SAY[k]); });
     return out;
   }
 
   var api = {
-    LESSONS: LESSONS, MOVE_NAMES: MOVE_NAMES, MESSAGES: MESSAGES, voiceKey: voiceKey, spokenLines: spokenLines,
+    LESSONS: LESSONS, MOVE_NAMES: MOVE_NAMES, MOVE_SAY: MOVE_SAY, COLOR_NAMES: COLOR_NAMES,
+    MESSAGES: MESSAGES, voiceKey: voiceKey, spokenLines: spokenLines,
     ALGS: { DANSE: DANSE, CROIX: CROIX, ARETES: ARETES, COINS: COINS, TOURNE: TOURNE }
   };
 

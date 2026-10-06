@@ -1,13 +1,14 @@
 /*
  * Service worker : garde Cube Malin sur l'appareil pour qu'il marche sans internet.
- * - « core » : l'appli elle-même. Servie depuis le cache, mise à jour en arrière-plan
- *   (une nouvelle version arrive au lancement suivant).
+ * - « core » : l'appli elle-même. Avec du réseau on prend toujours la dernière version
+ *   (et on la range) ; sans réseau, ou s'il ne répond pas vite, on sert la copie rangée.
  * - « voix » : les phrases enregistrées. Elles ne changent jamais (le nom du fichier dépend
  *   du texte), donc le cache d'abord. L'appli les télécharge toutes avec le bouton « Télécharger ».
  * Changer CORE (v2, v3…) quand la liste CORE_FILES change.
  */
 'use strict';
-var CORE = 'cube-malin-core-v1';
+var CORE = 'cube-malin-core-v2';
+var NETWORK_WAIT = 2500;   // au-delà, on n'attend plus le réseau (wifi faible)
 var VOIX = 'cube-malin-voix';
 var CORE_FILES = [
   './',
@@ -76,18 +77,18 @@ self.addEventListener('fetch', function (e) {
     return;
   }
 
+  var fresh = fetch(req).then(function (res) { return store(CORE, req, res); });
+  e.waitUntil(fresh.catch(function () { /* hors ligne */ }));
+  var timeout = new Promise(function (_, reject) { setTimeout(reject, NETWORK_WAIT); });
   e.respondWith(
-    caches.open(CORE).then(function (c) {
-      return c.match(req, { ignoreSearch: true }).then(function (hit) {
-        var fresh = fetch(req).then(function (res) { return store(CORE, req, res); });
-        if (hit) {
-          e.waitUntil(fresh.catch(function () { /* hors ligne : on garde le cache */ }));
-          return hit;
-        }
-        return fresh.catch(function () {
-          // Hors ligne et pas en cache : pour une page, on renvoie l'appli.
-          if (req.mode === 'navigate') return c.match('index.html');
-          return Response.error();
+    Promise.race([fresh, timeout]).catch(function () {
+      return caches.open(CORE).then(function (c) {
+        return c.match(req, { ignoreSearch: true }).then(function (hit) {
+          if (hit) return hit;
+          // Pas de copie : on attend quand même le réseau, ou pour une page on renvoie l'appli.
+          return fresh.catch(function () {
+            return req.mode === 'navigate' ? c.match('index.html') : Response.error();
+          });
         });
       });
     })

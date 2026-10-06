@@ -24,6 +24,20 @@
   var DEFAULT_PITCH = 0.5;
   var DEFAULT_YAW = -0.62;
 
+  // Vue choisie automatiquement pour chaque geste : on garde toujours la face avant (vert)
+  // face à l'enfant, et on penche le cube pour bien montrer la tranche qui tourne.
+  var MOVE_VIEW = {
+    R: [-0.72, 0.42],   // la droite bien visible
+    L: [0.72, 0.42],    // on passe du côté gauche
+    U: [-0.5, 0.78],    // vu un peu d'en haut
+    D: [-0.5, -0.42],   // vu un peu d'en dessous
+    F: [-0.32, 0.32],   // presque de face
+    B: [-2.5, 0.5],     // de derrière
+    x: [-0.62, 0.5],
+    y: [-0.62, 0.62],
+    z: [-0.32, 0.32]
+  };
+
   function v3(a) { return new THREE.Vector3(a[0], a[1], a[2]); }
   function easeInOut(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
   function reducedMotion() {
@@ -110,7 +124,7 @@
   }
 
   // ----- Où dessiner les flèches pour chaque geste -----
-  var F = 1.58; // un peu au-dessus de la surface des autocollants
+  var F = 1.74; // au-dessus des autocollants, même quand la tranche avant sort un peu
   var E = 1.2;  // longueur depuis le centre
   function line(a, b) { return [v3(a), v3(b)]; }
   function arc(center, normal, radius, from, to, steps) {
@@ -173,6 +187,7 @@
     this.pitch = DEFAULT_PITCH;
     this.viewTween = null;
     this.spin = null;
+    this.autoView = true;
     this._init();
   }
 
@@ -374,31 +389,62 @@
     var p = CM.parseToken(token);
     var showArrow = opts.arrow !== false;
     var k = this.speed * (reducedMotion() ? 0.6 : 1);
-    var lead = showArrow ? 420 * k : 0;
-    var dur = (p.double ? 760 : 520) * k;
-    if (opts.fast) { lead = 0; dur = 140; }
+    // 1) la caméra se place  2) la tranche sort et s'allume, la flèche apparaît  3) elle tourne  4) elle rentre
+    var aim = showArrow && !opts.fast && this.autoView ? this.aimAt(p.face, 420 * k) : 0;
+    var lead = showArrow ? aim + 750 * k : 0;
+    var dur = (p.double ? 1000 : 650) * k;
+    var settle = showArrow ? 220 * k : 0;
+    if (opts.fast) { lead = 0; dur = 140; settle = 0; }
 
-    var moving = this.model.layerCubies(p).map(function (q) { return self.pieces[q.id].group; });
+    var cubies = this.model.layerCubies(p);
+    var moving = cubies.map(function (q) { return self.pieces[q.id].group; });
+    var wholeCube = p.layers.length === 3;
+    // La tranche glisse un peu vers l'extérieur pour qu'on voie bien laquelle va tourner.
+    var out = new THREE.Vector3();
+    if (!wholeCube) out.setComponent(p.axis, p.layers[0] * 0.16);
+    var glow = cubies.map(function (q) { return self.pieces[q.id].stickers; });
+
     this.pivot.rotation.set(0, 0, 0);
+    this.pivot.position.set(0, 0, 0);
     this.pivot.updateMatrixWorld(true);
-    if (showArrow && !opts.fast) this.showArrow(token);
+    moving.forEach(function (g) { self.pivot.attach(g); });
 
     return new Promise(function (resolve) {
       var start = performance.now();
-      var attached = false;
+      var arrowShown = false;
       var target = p.quarters * Math.PI / 2;
       var axis = AXES[p.axis];
+      var setGlow = function (v) {
+        glow.forEach(function (list) {
+          list.forEach(function (st) {
+            if (!self._focusMesh(st.mesh)) {
+              st.mesh.material.emissive.copy(st.mesh.material.color);
+              st.mesh.material.emissiveIntensity = v;
+            }
+          });
+        });
+      };
       var a = {
         tick: function (now) {
           var t = now - start;
-          if (t < lead) return;
-          if (!attached) {
-            moving.forEach(function (g) { self.pivot.attach(g); });
-            attached = true;
+          if (t < aim) return;                    // la caméra se tourne d'abord
+          if (showArrow && !opts.fast && !arrowShown) { self.showArrow(token); arrowShown = true; }
+          var tl = t - aim;
+          var leadOnly = lead - aim;
+          if (tl < leadOnly) {
+            var e = easeInOut(Math.min(1, tl / Math.max(1, leadOnly * 0.5)));
+            self.pivot.position.copy(out).multiplyScalar(e);
+            setGlow(0.35 * e + 0.12 * Math.sin(tl / 110) * e);
+            return;
           }
           var u = Math.min(1, (t - lead) / dur);
+          self.pivot.position.copy(out);
           self.pivot.rotation[axis] = target * easeInOut(u);
-          if (u >= 1) a.finish();
+          if (u < 1) return;
+          var s = settle ? Math.min(1, (t - lead - dur) / settle) : 1;
+          self.pivot.position.copy(out).multiplyScalar(1 - easeInOut(s));
+          setGlow(0.35 * (1 - s));
+          if (s >= 1) a.finish();
         },
         finish: function () {
           if (a.done) return;
@@ -406,6 +452,7 @@
           self.anim = null;
           self.model.move(p);
           self.pivot.rotation.set(0, 0, 0);
+          self.pivot.position.set(0, 0, 0);
           self.sync();
           self.hideArrow();
           resolve(true);
@@ -413,6 +460,30 @@
       };
       self.anim = a;
     });
+  };
+
+  CubeView.prototype._focusMesh = function (mesh) {
+    // Les pièces « en vedette » gardent leur propre pulsation.
+    var self = this;
+    return this.focus.length && this.model.cubies.some(function (q) {
+      return self._isFocus(q) && self.pieces[q.id].stickers.some(function (st) { return st.mesh === mesh; });
+    });
+  };
+
+  /**
+   * Tourne doucement la vue vers le geste à venir. Renvoie la durée du mouvement (0 si la vue
+   * est déjà bonne ou si l'enfant tient le cube lui-même avec le doigt).
+   */
+  CubeView.prototype.aimAt = function (face, ms) {
+    var v = MOVE_VIEW[face];
+    if (!v || this.dragging) return 0;
+    var turns = Math.round((this.yaw - v[0]) / (Math.PI * 2));
+    var to = [v[0] + turns * Math.PI * 2, v[1]];
+    var dist = Math.abs(to[0] - this.yaw) + Math.abs(to[1] - this.pitch);
+    if (dist < 0.05) return 0;
+    var dur = Math.max(250, Math.min(ms, ms * dist / 0.8));
+    this.viewTween = { from: [this.yaw, this.pitch], to: to, start: performance.now(), dur: dur };
+    return dur;
   };
 
   /** Termine immédiatement l'animation en cours (le modèle reste cohérent). */
@@ -451,6 +522,7 @@
     el.addEventListener('pointerdown', function (e) {
       drag = { x: e.clientX, y: e.clientY, yaw: self.yaw, pitch: self.pitch, id: e.pointerId };
       self.viewTween = null;
+      self.dragging = true;
       el.setPointerCapture(e.pointerId);
       el.style.cursor = 'grabbing';
     });
@@ -459,7 +531,7 @@
       self.yaw = drag.yaw + (e.clientX - drag.x) * 0.01;
       self.pitch = Math.max(-1.3, Math.min(1.3, drag.pitch + (e.clientY - drag.y) * 0.01));
     });
-    var end = function () { drag = null; el.style.cursor = 'grab'; };
+    var end = function () { drag = null; self.dragging = false; el.style.cursor = 'grab'; };
     el.addEventListener('pointerup', end);
     el.addEventListener('pointercancel', end);
   };

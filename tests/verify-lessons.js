@@ -148,6 +148,35 @@ L.LESSONS.forEach(function (lesson) {
   });
 });
 
+// Le sens de l'animation correspond au nom affiché (« Droite monte »…), y compris pour les « 2 fois ».
+// On fait tourner un point de la face avant d'un tout petit angle dans le sens de l'animation
+// et on regarde où il part.
+var SENS = {
+  R: { pt: [1, 0, 1.5], dir: [0, 1, 0] },    // monte
+  L: { pt: [-1, 0, 1.5], dir: [0, -1, 0] },  // descend
+  U: { pt: [0, 1, 1.5], dir: [-1, 0, 0] },   // vers la gauche
+  D: { pt: [0, -1, 1.5], dir: [1, 0, 0] },   // vers la droite
+  F: { pt: [0, 1, 1.5], dir: [1, 0, 0] },    // horloge : le haut part à droite
+  y: { pt: [0, 0, 1.5], dir: [-1, 0, 0] }    // tout le cube vers la gauche
+};
+function smallTurn(v, axis, sign) {          // rotation de +/- 1° autour de l'axe
+  var a = sign * Math.PI / 180, c = Math.cos(a), s = Math.sin(a), x = v[0], y = v[1], z = v[2];
+  if (axis === 0) return [x, y * c - z * s, y * s + z * c];
+  if (axis === 1) return [x * c + z * s, y, -x * s + z * c];
+  return [x * c - y * s, x * s + y * c, z];
+}
+Object.keys(SENS).forEach(function (f) {
+  ['', "'", '2'].forEach(function (suf) {
+    var t = f + suf;
+    var p = M.parseToken(t);
+    var moved = smallTurn(SENS[f].pt, p.axis, Math.sign(p.quarters));
+    var d = [moved[0] - SENS[f].pt[0], moved[1] - SENS[f].pt[1], moved[2] - SENS[f].pt[2]];
+    var dot = d[0] * SENS[f].dir[0] + d[1] * SENS[f].dir[1] + d[2] * SENS[f].dir[2];
+    var want = suf === "'" ? -1 : 1;
+    if (Math.sign(dot) !== want) { failures++; console.log('ÉCHEC  sens de rotation de ' + t); }
+  });
+});
+
 // Le modèle lui-même : un mélange suivi de son inverse redonne un cube résolu.
 var sc = M.scramble(30);
 if (!new Cube().apply(sc).apply(M.invert(sc)).isSolved()) { failures++; console.log('ÉCHEC  inverse du mélange'); }

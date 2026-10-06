@@ -7,6 +7,8 @@
   var LESSONS = window.CubeLessons.LESSONS;
   var NAMES = window.CubeLessons.MOVE_NAMES;
   var MESSAGES = window.CubeLessons.MESSAGES;
+  var MOVE_SAY = window.CubeLessons.MOVE_SAY;
+  var COLOR_NAMES = window.CubeLessons.COLOR_NAMES;
 
   var $ = function (id) { return document.getElementById(id); };
   var store = {
@@ -392,6 +394,9 @@
     view.setViewMode(l.view);
     view.setFocus(cs.focus || []);
     view.setModel(state.start.clone());
+    view.resetView();
+    paintHold();
+    paintStep();
     setBubble(l.goal);
     $('demo-count').textContent = '· ' + alg.length + (alg.length > 1 ? ' gestes' : ' geste');
     hideMovePill();
@@ -444,21 +449,49 @@
   // ======================================================================
   // Lecteur de démo
   // ======================================================================
-  function showMovePill(token) {
+  function showMovePill(token, count) {
     $('move-pill-icon').innerHTML = moveIcon(token);
-    $('move-pill-name').textContent = NAMES[token];
-    $('move-pill-code').textContent = 'Geste ' + token.replace("'", '’');
+    $('move-pill-name').textContent = MOVE_SAY[token] || NAMES[token];
+    $('move-pill-code').textContent = (count ? count + ' · ' : '') + 'code ' + token.replace("'", '’');
     var pill = $('move-pill');
-    pill.hidden = true;
+    pill.dataset.idle = 'false';
+    pill.classList.remove('pop');
     void pill.offsetWidth; // relance l'animation d'apparition
-    pill.hidden = false;
+    pill.classList.add('pop');
   }
-  function hideMovePill() { $('move-pill').hidden = true; }
+  /** Quand aucun geste ne tourne : le bandeau dit quoi faire ensuite. */
+  function hideMovePill() {
+    var n = state.flat.length;
+    $('move-pill').dataset.idle = 'true';
+    $('move-pill-icon').innerHTML = '<svg class="mascot" viewBox="0 0 64 64" aria-hidden="true"><use href="#mascot"/></svg>';
+    $('move-pill-name').textContent = state.idx === 0
+      ? 'Appuie sur « Premier geste » pour commencer.'
+      : state.idx >= n ? 'Bravo, c’est fini ! « Revoir » pour recommencer.' : 'Appuie sur « Geste suivant ».';
+    $('move-pill-code').textContent = '';
+  }
 
   function setPlaying(p) {
     state.playing = p;
     $('btn-play').dataset.playing = String(p);
-    $('btn-play-label').textContent = p ? 'Pause' : (state.idx > 0 && state.idx < state.flat.length ? 'Continuer' : 'Regarder');
+    $('btn-play-label').textContent = p ? 'Pause' : 'Tout regarder';
+    paintStep();
+  }
+
+  /** Le gros bouton : « Premier geste », « Geste suivant » ou « Revoir », avec le compteur. */
+  function paintStep() {
+    var n = state.flat.length;
+    $('btn-step-label').textContent = state.idx === 0 ? 'Premier geste' : (state.idx >= n ? 'Revoir' : 'Geste suivant');
+    $('step-count').textContent = state.idx < n ? (state.idx + 1) + ' sur ' + n : '';
+  }
+
+  /** Le rappel « tiens ton cube » : couleur du centre de devant et du dessus. */
+  function paintHold() {
+    var f = view.model.centerColor('F');
+    var u = view.model.centerColor('U');
+    $('hold-front').textContent = COLOR_NAMES[f];
+    $('hold-top').textContent = COLOR_NAMES[u];
+    $('hold-front-dot').style.setProperty('--dot', 'var(--c-' + f + ')');
+    $('hold-top-dot').style.setProperty('--dot', 'var(--c-' + u + ')');
   }
 
   function stop() {
@@ -470,7 +503,7 @@
   function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 
   /** Joue un geste de la démo (avec la phrase du morceau si on y entre). */
-  function playOne(runId) {
+  function playOne(runId, stepMode) {
     var m = state.flat[state.idx];
     var cs = currentCase();
     var seg = cs.segments[m.seg];
@@ -479,15 +512,20 @@
       state.spokenSeg = m.seg;
       setBubble(seg.say);
       talk = voice.say(seg.say);
+    } else if (stepMode) {
+      // Pas à pas : chaque geste est dit en entier (« Tourne la colonne de droite vers le haut »).
+      talk = voice.say(MOVE_SAY[m.token]);
     }
     $('bravo').hidden = true;
     paintDemoCurrent();
-    showMovePill(m.token);
+    showMovePill(m.token, 'Geste ' + (state.idx + 1) + ' sur ' + state.flat.length);
     var caseRun = state.caseRun;
     return view.animateMove(m.token).then(function () {
       if (caseRun !== state.caseRun) return false;   // le cube a été remplacé entre-temps
       state.idx++;
       paintDemo();
+      paintHold();
+      paintStep();
       if (runId !== state.runId) return false;      // pause demandée pendant le geste
       var next = state.flat[state.idx];
       var segEnds = !next || next.seg !== m.seg;
@@ -514,7 +552,6 @@
     setPlaying(false);
     hideMovePill();
     paintDemo();
-    $('btn-play-label').textContent = 'Revoir';
     if (state.li === LESSONS.length - 1) { view.celebrate(); confetti(90); }
     $('bravo').hidden = false;
     setTimeout(function () { $('bravo').hidden = true; }, 1800);
@@ -525,6 +562,8 @@
     view.setModel(state.start.clone());
     state.idx = 0;
     state.spokenSeg = -1;
+    paintHold();
+    paintStep();
   }
 
   function play() {
@@ -545,8 +584,8 @@
     stop();
     if (state.idx >= state.flat.length) restartModel();
     var runId = state.runId;
-    playOne(runId).then(function () {
-      hideMovePill();
+    // Le bandeau du geste reste affiché : l'enfant le refait sur son cube, puis appuie à nouveau.
+    playOne(runId, true).then(function () {
       if (state.idx >= state.flat.length) finishDemo();
       else setPlaying(false);
     });
@@ -561,6 +600,7 @@
     view.setModel(m);
     state.idx = k;
     state.spokenSeg = -1;
+    paintHold();
     stepOnce();
   }
 
@@ -669,6 +709,7 @@
 
   function afterPlayMove() {
     if (state.mode !== 'play') return;
+    paintHold();
     var solved = view.model.isSolved();
     if (solved && play$.scrambled && !play$.queue.length) {
       play$.scrambled = false;
@@ -738,7 +779,7 @@
         e.preventDefault();
       }
     } else if (e.key === ' ' && !(e.target.closest && e.target.closest('button'))) {
-      play();
+      stepOnce();
       e.preventDefault();
     }
   });
@@ -769,6 +810,7 @@
       b.setAttribute('aria-selected', String(b.dataset.mode === mode));
     });
     if (mode === 'play') afterPlayMove();
+    paintHold();
   }
   document.querySelector('.modes').addEventListener('click', function (e) {
     var b = e.target.closest('.mode');
@@ -964,7 +1006,7 @@
       var started = offline.cached >= total / 4;
       status.textContent = offline.failed
         ? 'Le téléchargement s’est arrêté (connexion coupée ?). ' + offline.cached + ' voix sur ' + total + '. Réessaie avec le wifi.'
-        : 'Environ 13 Mo. À faire une seule fois, avec le wifi.' + (started ? ' Déjà ' + offline.cached + ' voix sur ' + total + '.' : '');
+        : 'Environ 14 Mo. À faire une seule fois, avec le wifi.' + (started ? ' Déjà ' + offline.cached + ' voix sur ' + total + '.' : '');
       dl.hidden = false;
       dl.textContent = offline.failed || started ? 'Continuer le téléchargement' : 'Télécharger';
     }

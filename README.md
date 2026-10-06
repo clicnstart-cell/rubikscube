@@ -13,19 +13,18 @@ node serve.js
 
 puis aller sur http://localhost:5180 (autre port : `$env:PORT=8080; node serve.js` dans PowerShell).
 
-On peut aussi simplement double-cliquer sur `index.html`. Il faut une connexion internet
-pour la 3D (Three.js) et les polices.
+On peut aussi simplement double-cliquer sur `index.html` : tout marche, même sans internet.
 
 ## Sans internet
 
 - **Téléphone / tablette** : sur le site, le bouton **Télécharger** garde l'appli et les
-  90 voix sur l'appareil (environ 13 Mo) et explique comment ajouter l'icône sur l'écran
+  voix sur l'appareil (environ 14 Mo) et explique comment ajouter l'icône sur l'écran
   d'accueil. Ensuite tout marche hors connexion (PWA : `manifest.webmanifest` + `sw.js`).
 - **Ordinateur** : télécharger le dépôt en .zip, le dézipper, double-cliquer sur `index.html`.
 
 Tout est dans le projet (moteur 3D dans `js/vendor/`, polices dans `fonts/`), rien n'est
 chargé depuis internet. Quand la liste des fichiers de l'appli change, mettre à jour
-`CORE_FILES` dans `sw.js` et passer `CORE` à la version suivante (`v2`, `v3`…).
+`CORE_FILES` dans `sw.js` et passer `CORE` à la version suivante (`v3`, `v4`…).
 Les icônes se régénèrent avec `tools/make-icons.ps1`.
 
 ## Ce qu'il y a dedans

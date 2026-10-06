@@ -49,9 +49,10 @@
     <!-- La scène 3D -->
     <section class="stage-wrap" aria-label="Le cube">
       <div class="stage" id="stage">
-        <div class="move-pill" id="move-pill" hidden>
-          <span class="move-icon" id="move-pill-icon"></span>
-          <span class="move-pill-text"><strong id="move-pill-name"></strong><small id="move-pill-code"></small></span>
+        <div class="hold" id="hold" aria-live="polite">
+          <span class="hold-title">Tiens ton cube</span>
+          <span class="hold-item"><i class="hold-dot" id="hold-front-dot"></i><b id="hold-front">vert</b> devant toi</span>
+          <span class="hold-item"><i class="hold-dot" id="hold-top-dot"></i><b id="hold-top">jaune</b> en haut</span>
         </div>
         <div class="stage-hint" id="stage-hint">Glisse ton doigt pour tourner le cube</div>
         <div class="bravo" id="bravo" hidden>Bravo !</div>
@@ -61,19 +62,24 @@
         </button>
       </div>
 
+      <div class="move-pill" id="move-pill" data-idle="true" aria-live="polite">
+        <span class="move-icon" id="move-pill-icon"></span>
+        <span class="move-pill-text"><strong id="move-pill-name"></strong><small id="move-pill-code"></small></span>
+      </div>
+
       <div class="controls" id="controls">
         <button class="ctl" id="btn-restart" title="Recommencer la démo">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5v14" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M19 6l-10 6 10 6z" fill="currentColor"/></svg>
           <span>Recommencer</span>
         </button>
-        <button class="ctl ctl-play" id="btn-play" title="Regarder la démo">
-          <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5l13 7.5-13 7.5z" fill="currentColor"/></svg>
-          <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><rect x="5.5" y="4.5" width="4.5" height="15" rx="1.5" fill="currentColor"/><rect x="14" y="4.5" width="4.5" height="15" rx="1.5" fill="currentColor"/></svg>
-          <span id="btn-play-label">Regarder</span>
+        <button class="ctl ctl-main" id="btn-step" title="Montrer le geste suivant (barre d’espace)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l10 7-10 7z" fill="currentColor"/><path d="M19 5v14" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>
+          <span class="ctl-main-text"><span id="btn-step-label">Geste suivant</span><small id="step-count"></small></span>
         </button>
-        <button class="ctl" id="btn-step" title="Faire seulement le geste suivant">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6l10 6-10 6z" fill="currentColor"/><path d="M19 5v14" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>
-          <span>Un geste</span>
+        <button class="ctl ctl-auto" id="btn-play" title="Regarder tous les gestes à la suite">
+          <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 5.5l8 6.5-8 6.5zM12.5 5.5l8 6.5-8 6.5z" fill="currentColor"/></svg>
+          <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><rect x="5.5" y="4.5" width="4.5" height="15" rx="1.5" fill="currentColor"/><rect x="14" y="4.5" width="4.5" height="15" rx="1.5" fill="currentColor"/></svg>
+          <span id="btn-play-label">Tout regarder</span>
         </button>
         <div class="speed" role="radiogroup" aria-label="Vitesse">
           <button class="speed-btn" role="radio" aria-checked="false" data-speed="1.7" title="Lent">
@@ -201,7 +207,7 @@
       <li class="sheet-step" id="step-files">
         <p class="sheet-step-title">Télécharger le cube et les voix</p>
         <div class="progress" aria-hidden="true"><span id="dl-bar"></span></div>
-        <p class="sheet-note" id="dl-status">Environ 13 Mo. À faire une seule fois, avec le wifi.</p>
+        <p class="sheet-note" id="dl-status">Environ 14 Mo. À faire une seule fois, avec le wifi.</p>
         <button class="btn primary" id="btn-download">Télécharger</button>
       </li>
       <li class="sheet-step" id="step-install">
@@ -212,7 +218,7 @@
     </ol>
 
     <p class="sheet-pc">Sur un ordinateur, tu peux aussi prendre la
-      <a href="https://github.com/clicnstart-cell/rubikscube/archive/refs/heads/main.zip">version PC (.zip, 13 Mo)</a> :
+      <a href="https://github.com/clicnstart-cell/rubikscube/archive/refs/heads/main.zip">version PC (.zip, 14 Mo)</a> :
       dézippe-la, puis double-clique sur <code>index.html</code>.</p>
   </section>
 </div>

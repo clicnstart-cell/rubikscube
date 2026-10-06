@@ -38,7 +38,8 @@
     var def = MOVES[m[1]];
     var double = m[2] === '2' || m[2] === "2'";
     var prime = m[2] === "'";
-    var quarters = double ? 2 : (prime ? -def.dir : def.dir);
+    // Un demi-tour tourne dans le même sens que le quart de tour (comme la flèche affichée).
+    var quarters = double ? (m[2] === "2'" ? -2 : 2) * def.dir : (prime ? -def.dir : def.dir);
     return { token: tok, face: m[1], prime: prime, double: double, axis: def.axis, layers: def.layers, quarters: quarters };
   }
 
