@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "cube-malin",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["serve.js"],
+      "port": 5180,
+      "autoPort": true
+    }
+  ]
+}

@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cube Malin</title>
+<meta name="description" content="Apprendre à résoudre le Rubik's Cube pas à pas, en 3D, pour les enfants de 5 à 10 ans.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Baloo+2:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app" id="app">
+
+  <header class="topbar">
+    <a class="brand" href="#" id="brand" aria-label="Cube Malin, accueil">
+      <svg class="mascot" viewBox="0 0 64 64" aria-hidden="true"><use href="#mascot"/></svg>
+      <span class="brand-name">Cube Malin</span>
+    </a>
+    <nav class="modes" role="tablist" aria-label="Choisir un mode">
+      <button class="mode" role="tab" id="tab-learn" aria-selected="true" data-mode="learn">Apprendre</button>
+      <button class="mode" role="tab" id="tab-play" aria-selected="false" data-mode="play">Jouer librement</button>
+    </nav>
+    <button class="voice" id="voice-toggle" aria-pressed="true" title="Lire les explications à voix haute">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path class="wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path class="mute" d="M16 9l6 6M22 9l-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <span id="voice-label">Voix</span>
+    </button>
+  </header>
+
+  <main class="layout" id="layout" data-mode="learn">
+
+    <!-- Le chemin des niveaux -->
+    <nav class="path" aria-label="Les niveaux">
+      <p class="path-title">Ton chemin</p>
+      <ol class="levels" id="levels"></ol>
+    </nav>
+
+    <!-- La scène 3D -->
+    <section class="stage-wrap" aria-label="Le cube">
+      <div class="stage" id="stage">
+        <div class="move-pill" id="move-pill" hidden>
+          <span class="move-icon" id="move-pill-icon"></span>
+          <span class="move-pill-text"><strong id="move-pill-name"></strong><small id="move-pill-code"></small></span>
+        </div>
+        <div class="stage-hint" id="stage-hint">Glisse ton doigt pour tourner le cube</div>
+        <div class="bravo" id="bravo" hidden>Bravo !</div>
+        <button class="recenter" id="recenter" title="Remettre le cube de face">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5a7 7 0 1 1-6.6 4.7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M4 4.5v5h5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>De face</span>
+        </button>
+      </div>
+
+      <div class="controls" id="controls">
+        <button class="ctl" id="btn-restart" title="Recommencer la démo">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5v14" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M19 6l-10 6 10 6z" fill="currentColor"/></svg>
+          <span>Recommencer</span>
+        </button>
+        <button class="ctl ctl-play" id="btn-play" title="Regarder la démo">
+          <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5l13 7.5-13 7.5z" fill="currentColor"/></svg>
+          <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><rect x="5.5" y="4.5" width="4.5" height="15" rx="1.5" fill="currentColor"/><rect x="14" y="4.5" width="4.5" height="15" rx="1.5" fill="currentColor"/></svg>
+          <span id="btn-play-label">Regarder</span>
+        </button>
+        <button class="ctl" id="btn-step" title="Faire seulement le geste suivant">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6l10 6-10 6z" fill="currentColor"/><path d="M19 5v14" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>
+          <span>Un geste</span>
+        </button>
+        <div class="speed" role="radiogroup" aria-label="Vitesse">
+          <button class="speed-btn" role="radio" aria-checked="false" data-speed="1.7" title="Lent">
+            <svg viewBox="0 0 32 24" aria-hidden="true"><path d="M5 17c0-5 4-9 9-9s9 4 9 9z" fill="currentColor"/><circle cx="26" cy="14" r="3" fill="currentColor"/><path d="M7 17v3M20 17v3" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+            <span>Lent</span>
+          </button>
+          <button class="speed-btn" role="radio" aria-checked="true" data-speed="1" title="Normal">
+            <span>Normal</span>
+          </button>
+          <button class="speed-btn" role="radio" aria-checked="false" data-speed="0.5" title="Rapide">
+            <svg viewBox="0 0 32 24" aria-hidden="true"><ellipse cx="14" cy="15" rx="8" ry="5.5" fill="currentColor"/><circle cx="23" cy="10" r="3.6" fill="currentColor"/><path d="M22 7l-1-6M25 7l1-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M8 20l-2 2M19 20l2 2" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+            <span>Rapide</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Le panneau de la leçon -->
+    <section class="panel lesson" id="lesson" aria-live="polite">
+      <header class="lesson-head">
+        <span class="level-badge" id="lesson-badge">1</span>
+        <div class="lesson-titles">
+          <p class="eyebrow" id="lesson-eyebrow">Niveau 1</p>
+          <h1 id="lesson-title">Ton cube</h1>
+          <p class="subtitle" id="lesson-subtitle"></p>
+        </div>
+      </header>
+
+      <div class="bubble">
+        <svg class="mascot small" viewBox="0 0 64 64" aria-hidden="true"><use href="#mascot"/></svg>
+        <div class="bubble-body">
+          <p id="bubble-text"></p>
+          <button class="listen" id="btn-listen" title="Écouter">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path d="M16 8.5a5 5 0 0 1 0 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            Écouter
+          </button>
+        </div>
+      </div>
+
+      <div class="cases-block">
+        <p class="label" id="cases-label">Choisis ce que tu vois sur ton cube</p>
+        <div class="cases" id="cases" role="tablist"></div>
+      </div>
+
+      <div class="recipe-card" id="recipe-card" hidden>
+        <p class="label">À retenir</p>
+        <p class="recipe-name" id="recipe-name"></p>
+        <div class="recipe-moves" id="recipe-moves"></div>
+      </div>
+
+      <div class="demo-block">
+        <p class="label">Les gestes de la démo <span class="count" id="demo-count"></span></p>
+        <ol class="demo" id="demo"></ol>
+      </div>
+
+      <aside class="tip" id="tip">
+        <strong>Astuce</strong>
+        <p id="tip-text"></p>
+      </aside>
+
+      <footer class="lesson-foot">
+        <button class="btn ghost" id="btn-prev">Niveau précédent</button>
+        <button class="btn primary" id="btn-done">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8l2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2 6.4 20.2l1.1-6.3L2.9 9.5l6.3-.9z" fill="currentColor"/></svg>
+          <span id="btn-done-label">J’ai réussi !</span>
+        </button>
+      </footer>
+    </section>
+
+    <!-- Le mode libre -->
+    <section class="panel play" id="play" aria-label="Jouer librement">
+      <header class="lesson-head">
+        <span class="level-badge play-badge">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5l13 7.5-13 7.5z" fill="currentColor"/></svg>
+        </span>
+        <div class="lesson-titles">
+          <p class="eyebrow">Mode libre</p>
+          <h1>À toi de jouer</h1>
+          <p class="subtitle">Touche un geste pour tourner le cube</p>
+        </div>
+      </header>
+
+      <div class="pad" id="pad"></div>
+
+      <div class="play-actions">
+        <button class="btn" id="btn-scramble">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h3.5c4 0 6 10 10 10H21M3 17h3.5c1.6 0 2.8-1.6 3.9-3.6M13.6 9.6C14.7 8 15.8 7 17 7h4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M18.5 4.5L21 7l-2.5 2.5M18.5 14.5L21 17l-2.5 2.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Mélanger
+        </button>
+        <button class="btn" id="btn-undo">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7H4V2" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 7A8 8 0 1 1 6 17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+          Annuler
+        </button>
+        <button class="btn" id="btn-rewind" title="Le cube refait tous tes gestes à l’envers">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 6l-8 6 8 6zM21 6l-8 6 8 6z" fill="currentColor"/></svg>
+          Rembobiner
+        </button>
+        <button class="btn" id="btn-new">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8l2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2 6.4 20.2l1.1-6.3L2.9 9.5l6.3-.9z" fill="currentColor"/></svg>
+          Cube neuf
+        </button>
+      </div>
+
+      <p class="play-status" id="play-status">Le cube est tout neuf. Mélange-le, puis essaie de le refaire !</p>
+      <p class="play-keys">Sur un clavier : R, L, U, D, F, Y. Avec Maj pour l’envers.</p>
+    </section>
+  </main>
+</div>
+
+<canvas class="confetti" id="confetti" aria-hidden="true"></canvas>
+
+<!-- La mascotte : un petit cube souriant -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="mascot" viewBox="0 0 64 64">
+    <path d="M32 5 57 18 32 31 7 18z" fill="#ffd21a" stroke="#1b2140" stroke-width="2.6" stroke-linejoin="round"/>
+    <path d="M7 18 32 31v28L7 46z" fill="#00a650" stroke="#1b2140" stroke-width="2.6" stroke-linejoin="round"/>
+    <path d="M32 31 57 18v28L32 59z" fill="#e3233a" stroke="#1b2140" stroke-width="2.6" stroke-linejoin="round"/>
+    <path d="M19.5 18.5 32 12l12.5 6.5M15 30v12M44.5 38.5v12" fill="none" stroke="#1b2140" stroke-width="1.6" stroke-linecap="round" opacity=".35"/>
+    <ellipse cx="15.5" cy="33" rx="3.2" ry="3.8" fill="#fff"/><ellipse cx="25" cy="38" rx="3.2" ry="3.8" fill="#fff"/>
+    <circle cx="16.2" cy="34" r="1.7" fill="#1b2140"/><circle cx="25.7" cy="39" r="1.7" fill="#1b2140"/>
+    <path d="M14.5 41.5c2.5 3.6 7 5.6 11 5.6" fill="none" stroke="#1b2140" stroke-width="2.2" stroke-linecap="round"/>
+  </symbol>
+</svg>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="js/cube.js"></script>
+<script src="js/lessons.js"></script>
+<script src="js/view3d.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
