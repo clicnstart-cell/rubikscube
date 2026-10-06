@@ -457,6 +457,15 @@ h1 {
   padding: 2px 0;
 }
 .listen svg { width: 20px; height: 20px; }
+.bubble-body .voice-help {
+  margin: 8px 0 2px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--chip);
+  font-size: 14px;
+  line-height: 1.4;
+}
+.voice-help strong { display: block; font-family: var(--font-display); font-size: 15px; }
 
 .label {
   margin: 0 0 8px;

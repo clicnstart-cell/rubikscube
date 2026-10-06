@@ -83,40 +83,102 @@
   // ======================================================================
   // Voix
   // ======================================================================
+  // Sur téléphone, la synthèse vocale a plusieurs pièges :
+  //  - iPhone : la toute première phrase doit partir directement d'un toucher (on « débloque » la voix
+  //    au premier contact avec la page) ;
+  //  - Chrome Android : un speak() juste après cancel() est parfois ignoré, la synthèse peut rester
+  //    « en pause », et une phrase oubliée par le navigateur ne se termine jamais ;
+  //  - les voix arrivent en retard (getVoices() est vide au début).
+  // Si malgré tout rien ne sort, on affiche une aide dans la bulle.
   var voice = {
     on: store.get('voice', true),
     ok: 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window,
-    pick: function () {
-      if (!this.ok) return null;
-      var vs = window.speechSynthesis.getVoices().filter(function (v) { return /^fr/i.test(v.lang); });
-      var pref = vs.filter(function (v) { return /google|amélie|amelie|audrey|marie|denise|hortense|julie/i.test(v.name); });
-      return pref[0] || vs[0] || null;
+    voices: [],
+    unlocked: false,
+    current: null,      // garde la phrase en vie (sinon Chrome peut l'oublier en route)
+    heard: false,       // une phrase a déjà vraiment démarré
+    load: function () {
+      if (!this.ok) return;
+      try { this.voices = window.speechSynthesis.getVoices() || []; } catch (e) { this.voices = []; }
     },
-    stop: function () { if (this.ok) try { window.speechSynthesis.cancel(); } catch (e) { /* rien */ } },
+    pick: function () {
+      if (!this.voices.length) this.load();
+      var fr = this.voices.filter(function (v) { return /^fr([-_]|$)/i.test(v.lang); });
+      var byName = function (list) {
+        return list.filter(function (v) { return /amélie|amelie|audrey|marie|denise|hortense|julie|google/i.test(v.name); })[0] || list[0];
+      };
+      // Les voix de l'appareil marchent hors ligne et sans délai : on les préfère.
+      var local = fr.filter(function (v) { return v.localService; });
+      return byName(local) || byName(fr) || null;
+    },
+    unlock: function () {
+      if (!this.ok || this.unlocked) return;
+      this.unlocked = true;
+      try {
+        var u = new SpeechSynthesisUtterance(' ');
+        u.volume = 0;
+        u.lang = 'fr-FR';
+        window.speechSynthesis.speak(u);
+      } catch (e) { /* rien */ }
+    },
+    stop: function () {
+      if (!this.ok) return;
+      try {
+        var s = window.speechSynthesis;
+        if (s.speaking || s.pending) s.cancel();
+      } catch (e) { /* rien */ }
+    },
     say: function (text, force) {
       var self = this;
       if (!this.ok || (!this.on && !force) || !text) return Promise.resolve();
+      this.unlocked = true;
       return new Promise(function (resolve) {
         var done = false;
         var finish = function () { if (!done) { done = true; resolve(); } };
-        try {
-          window.speechSynthesis.cancel();
-          var u = new SpeechSynthesisUtterance(text.replace(/…/g, '.'));
-          u.lang = 'fr-FR';
-          u.rate = 0.95;
-          u.pitch = 1.08;
-          var v = self.pick();
-          if (v) u.voice = v;
-          u.onend = finish;
-          u.onerror = finish;
-          window.speechSynthesis.speak(u);
-          // Filet de sécurité si le navigateur n'envoie jamais « fin ».
-          setTimeout(finish, Math.min(16000, 1200 + text.length * 75));
-        } catch (e) { finish(); }
+        var s = window.speechSynthesis;
+        var u = new SpeechSynthesisUtterance(text.replace(/…/g, '.'));
+        u.lang = 'fr-FR';
+        u.rate = 0.95;
+        u.pitch = 1.08;
+        var v = self.pick();
+        if (v) { u.voice = v; u.lang = v.lang; }
+        var started = false;
+        u.onstart = function () { started = true; self.heard = true; voiceHelp(false); };
+        u.onend = finish;
+        u.onerror = function (e) {
+          if (e && e.error && e.error !== 'interrupted' && e.error !== 'canceled') voiceHelp(true);
+          finish();
+        };
+        self.current = u;
+        var go = function () {
+          try {
+            s.resume();     // Chrome Android peut rester bloqué en pause
+            s.speak(u);
+          } catch (e) { voiceHelp(true); finish(); }
+        };
+        var busy = false;
+        try { busy = s.speaking || s.pending; } catch (e) { /* rien */ }
+        if (busy) { s.cancel(); setTimeout(go, 120); } else go();
+        // Rien n'a démarré au bout de 3 s : le son est sûrement bloqué sur cet appareil.
+        setTimeout(function () { if (!started && !done && !self.heard) voiceHelp(true); }, 3000);
+        // Filet de sécurité si le navigateur n'envoie jamais « fin ».
+        setTimeout(finish, Math.min(16000, 1500 + text.length * 75));
       });
     }
   };
-  if (voice.ok) window.speechSynthesis.onvoiceschanged = function () { };
+  if (voice.ok) {
+    voice.load();
+    try { window.speechSynthesis.addEventListener('voiceschanged', function () { voice.load(); }); } catch (e) { /* rien */ }
+    // Débloque la voix au tout premier contact avec la page (obligatoire sur iPhone).
+    ['pointerdown', 'touchend', 'keydown'].forEach(function (ev) {
+      document.addEventListener(ev, function () { if (voice.on) voice.unlock(); }, { once: true, capture: true });
+    });
+  }
+
+  function voiceHelp(show) {
+    var el = $('voice-help');
+    if (el) el.hidden = !show || !voice.on;
+  }
 
   // ======================================================================
   // État
@@ -432,6 +494,13 @@
     $('btn-listen').hidden = !voice.ok;
     b.setAttribute('aria-pressed', String(voice.on));
     $('voice-label').textContent = voice.on ? 'Voix' : 'Muet';
+    if (!voice.ok) {
+      // Certains navigateurs intégrés (Facebook, Instagram…) n'ont pas de synthèse vocale.
+      $('voice-help-text').textContent = 'Ce navigateur ne sait pas lire à voix haute. Ouvre la page dans Chrome (Android) ou Safari (iPhone).';
+      $('voice-help').hidden = false;
+    } else if (!voice.on) {
+      voiceHelp(false);
+    }
   }
   $('voice-toggle').addEventListener('click', function () {
     voice.on = !voice.on;
