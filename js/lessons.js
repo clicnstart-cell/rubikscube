@@ -396,7 +396,39 @@
     }
   ];
 
-  var api = { LESSONS: LESSONS, MOVE_NAMES: MOVE_NAMES, ALGS: { DANSE: DANSE, CROIX: CROIX, ARETES: ARETES, COINS: COINS, TOURNE: TOURNE } };
+  // Phrases dites ailleurs dans l'appli (fin du parcours, mode libre).
+  var MESSAGES = {
+    fin: 'Incroyable ! Tu sais résoudre le Rubik’s Cube. Mélange-le et recommence pour aller de plus en plus vite !',
+    bravoLibre: 'Bravo ! Le cube est résolu !'
+  };
+
+  /** Identifiant stable d'une phrase (FNV-1a 32 bits) : nom du fichier audio enregistré. */
+  function voiceKey(text) {
+    var h = 0x811c9dc5;
+    for (var i = 0; i < text.length; i++) {
+      h ^= text.charCodeAt(i);
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return ('0000000' + h.toString(16)).slice(-8);
+  }
+
+  /** Toutes les phrases que l'appli peut dire à voix haute (sans doublon). */
+  function spokenLines() {
+    var seen = {};
+    var out = [];
+    var add = function (t) { if (t && !seen[t]) { seen[t] = true; out.push(t); } };
+    LESSONS.forEach(function (l) {
+      add(l.goal);
+      l.cases.forEach(function (c) { c.segments.forEach(function (s) { add(s.say); }); });
+    });
+    Object.keys(MESSAGES).forEach(function (k) { add(MESSAGES[k]); });
+    return out;
+  }
+
+  var api = {
+    LESSONS: LESSONS, MOVE_NAMES: MOVE_NAMES, MESSAGES: MESSAGES, voiceKey: voiceKey, spokenLines: spokenLines,
+    ALGS: { DANSE: DANSE, CROIX: CROIX, ARETES: ARETES, COINS: COINS, TOURNE: TOURNE }
+  };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CubeLessons = api;

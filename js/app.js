@@ -6,6 +6,7 @@
   var CM = window.CubeModel;
   var LESSONS = window.CubeLessons.LESSONS;
   var NAMES = window.CubeLessons.MOVE_NAMES;
+  var MESSAGES = window.CubeLessons.MESSAGES;
 
   var $ = function (id) { return document.getElementById(id); };
   var store = {
@@ -90,15 +91,35 @@
   //    « en pause », et une phrase oubliée par le navigateur ne se termine jamais ;
   //  - les voix arrivent en retard (getVoices() est vide au début).
   // Si malgré tout rien ne sort, on affiche une aide dans la bulle.
+  var speechOk = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
+  var hasRecorded = !!(window.CUBE_VOICE && window.CUBE_VOICE.keys.length) && typeof Audio !== 'undefined';
+
+  /** Un très court silence (WAV), pour « débloquer » le lecteur audio au premier toucher. */
+  function silentWav() {
+    var n = 400, buf = new ArrayBuffer(44 + n), d = new DataView(buf);
+    var w = function (o, s) { for (var i = 0; i < s.length; i++) d.setUint8(o + i, s.charCodeAt(i)); };
+    w(0, 'RIFF'); d.setUint32(4, 36 + n, true); w(8, 'WAVEfmt ');
+    d.setUint32(16, 16, true); d.setUint16(20, 1, true); d.setUint16(22, 1, true);
+    d.setUint32(24, 8000, true); d.setUint32(28, 8000, true); d.setUint16(32, 1, true); d.setUint16(34, 8, true);
+    w(36, 'data'); d.setUint32(40, n, true);
+    for (var i = 0; i < n; i++) d.setUint8(44 + i, 128);
+    return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+  }
+
+  // La voix enregistrée (HeyGen, « voix calme ») est jouée en priorité ;
+  // la synthèse vocale du navigateur sert de secours pour une phrase non enregistrée.
   var voice = {
     on: store.get('voice', true),
-    ok: 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window,
+    speechOk: speechOk,
+    ok: speechOk || hasRecorded,
+    audio: hasRecorded ? new Audio() : null,
+    audioDone: null,
     voices: [],
     unlocked: false,
     current: null,      // garde la phrase en vie (sinon Chrome peut l'oublier en route)
     heard: false,       // une phrase a déjà vraiment démarré
     load: function () {
-      if (!this.ok) return;
+      if (!this.speechOk) return;
       try { this.voices = window.speechSynthesis.getVoices() || []; } catch (e) { this.voices = []; }
     },
     pick: function () {
@@ -112,7 +133,17 @@
       return byName(local) || byName(fr) || null;
     },
     unlock: function () {
-      if (!this.ok || this.unlocked) return;
+      // Pas pendant une phrase : on la couperait.
+      if (this.audio && !this.audioUnlocked && !this.audioDone) {
+        var self = this;
+        var a = this.audio;
+        try {
+          a.src = this.silent || (this.silent = silentWav());
+          var p = a.play();
+          if (p && p.then) p.then(function () { self.audioUnlocked = true; }, function () { /* on réessaiera */ });
+        } catch (e) { /* rien */ }
+      }
+      if (!this.speechOk || this.unlocked) return;
       this.unlocked = true;
       try {
         var u = new SpeechSynthesisUtterance(' ');
@@ -122,15 +153,79 @@
       } catch (e) { /* rien */ }
     },
     stop: function () {
-      if (!this.ok) return;
+      if (this.audioDone) this.audioDone();
+      if (!this.speechOk) return;
       try {
         var s = window.speechSynthesis;
         if (s.speaking || s.pending) s.cancel();
       } catch (e) { /* rien */ }
     },
-    say: function (text, force) {
+    /** Adresse du fichier enregistré pour cette phrase, ou null. */
+    recorded: function (text) {
+      var rec = window.CUBE_VOICE;
+      if (!rec || !text) return null;
+      var k = window.CubeLessons.voiceKey(text);
+      return rec.keys.indexOf(k) !== -1 ? rec.dir + k + '.mp3' : null;
+    },
+    /** Met en cache les prochaines phrases pour qu'elles partent sans attendre. */
+    prefetch: function (texts) {
       var self = this;
-      if (!this.ok || (!this.on && !force) || !text) return Promise.resolve();
+      if (!this.on || !window.fetch) return;
+      texts.slice(0, 6).forEach(function (t) {
+        var url = self.recorded(t);
+        if (url) fetch(url).catch(function () { /* hors ligne : tant pis */ });
+      });
+    },
+    say: function (text, force) {
+      if ((!this.on && !force) || !text) return Promise.resolve();
+      var url = this.recorded(text);
+      if (url) return this.playFile(url, text);
+      return this.sayTTS(text);
+    },
+    /** Joue une phrase enregistrée (vraie voix), avec la synthèse vocale en secours. */
+    playFile: function (url, text) {
+      var self = this;
+      this.stop();
+      var a = this.audio;
+      return new Promise(function (resolve) {
+        var done = false;
+        var timer = null;
+        var finish = function () {
+          if (done) return;
+          done = true;
+          clearTimeout(timer);
+          a.onended = a.onerror = a.onplaying = a.onloadedmetadata = null;
+          if (self.audioDone === finish) self.audioDone = null;
+          try { a.pause(); } catch (e) { /* rien */ }
+          resolve();
+        };
+        self.audioDone = finish;
+        a.onplaying = function () { self.heard = true; self.audioUnlocked = true; voiceHelp(false); };
+        a.onended = finish;
+        a.onerror = function () { finish(); };
+        a.onloadedmetadata = function () {
+          clearTimeout(timer);
+          timer = setTimeout(finish, (a.duration || 10) * 1000 + 2500);
+        };
+        timer = setTimeout(finish, 20000);
+        a.src = url;
+        var p;
+        try { p = a.play(); } catch (e) { p = Promise.reject(e); }
+        if (p && p.catch) {
+          p.catch(function () {
+            // Lecture refusée (navigateur strict) : on tente la synthèse vocale.
+            if (done) return;
+            done = true;
+            clearTimeout(timer);
+            self.audioDone = null;
+            self.sayTTS(text).then(resolve);
+          });
+        }
+      });
+    },
+    sayTTS: function (text) {
+      var self = this;
+      if (!this.speechOk) { voiceHelp(true); return Promise.resolve(); }
       this.unlocked = true;
       return new Promise(function (resolve) {
         var done = false;
@@ -166,13 +261,20 @@
       });
     }
   };
-  if (voice.ok) {
+  if (voice.speechOk) {
     voice.load();
     try { window.speechSynthesis.addEventListener('voiceschanged', function () { voice.load(); }); } catch (e) { /* rien */ }
-    // Débloque la voix au tout premier contact avec la page (obligatoire sur iPhone).
-    ['pointerdown', 'touchend', 'keydown'].forEach(function (ev) {
-      document.addEventListener(ev, function () { if (voice.on) voice.unlock(); }, { once: true, capture: true });
-    });
+  }
+  if (voice.ok) {
+    // Débloque le son au premier vrai geste (obligatoire sur iPhone). Seuls « fin du toucher »,
+    // « clic » et « touche » comptent pour le navigateur, pas le simple appui du doigt.
+    var unlockOnGesture = function () {
+      voice.unlock();
+      if (voice.unlocked && (!voice.audio || voice.audioUnlocked)) {
+        ['touchend', 'click', 'keydown'].forEach(function (ev) { document.removeEventListener(ev, unlockOnGesture, true); });
+      }
+    };
+    ['touchend', 'click', 'keydown'].forEach(function (ev) { document.addEventListener(ev, unlockOnGesture, true); });
   }
 
   function voiceHelp(show) {
@@ -271,6 +373,7 @@
     state.caseRun++;
 
     renderDemo();
+    voice.prefetch([l.goal].concat(cs.segments.map(function (s) { return s.say; })));
     view.setViewMode(l.view);
     view.setFocus(cs.focus || []);
     view.setModel(state.start.clone());
@@ -465,7 +568,7 @@
       renderLevels();
       confetti();
       view.celebrate();
-      setBubble('Incroyable ! Tu sais résoudre le Rubik’s Cube. Mélange-le et recommence pour aller de plus en plus vite !');
+      setBubble(MESSAGES.fin);
       voice.say($('bubble-text').textContent);
     } else {
       confetti(60);
@@ -559,7 +662,7 @@
       playStatus('<strong>Bravo !</strong> Le cube est résolu. Tu es un vrai champion !');
       confetti();
       view.celebrate();
-      voice.say('Bravo ! Le cube est résolu !');
+      voice.say(MESSAGES.bravoLibre);
     } else if (solved) {
       playStatus('Le cube est tout neuf. Mélange-le, puis essaie de le refaire !');
     } else {
@@ -709,7 +812,7 @@
   // ======================================================================
   // Démarrage
   // ======================================================================
-  window.cubeMalin = { view: view, state: state }; // pratique pour déboguer dans la console
+  window.cubeMalin = { view: view, state: state, voice: voice }; // pratique pour déboguer dans la console
 
   renderPad();
   paintVoice();

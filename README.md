@@ -42,6 +42,22 @@ pour la 3D (Three.js) et les polices.
 | `js/app.js` | Interface, lecteur de démo, voix, mode libre |
 | `tests/verify-lessons.js` | Vérifie par simulation que chaque démo est correcte |
 
+## La voix
+
+Les explications sont enregistrées avec la voix HeyGen « voix calme » (`audio/voix/*.mp3`).
+Une phrase sans enregistrement est lue par la voix du navigateur, en secours.
+
+Après avoir modifié ou ajouté un texte dans `js/lessons.js`, enregistre les nouvelles phrases
+(seules les phrases manquantes sont générées, les anciennes sont supprimées) :
+
+```bash
+node tools/generate-voice.mjs
+```
+
+Il faut être connecté à HeyGen (`npx hyperframes auth login`) ou définir `HEYGEN_API_KEY`.
+`--dry` montre ce qui serait généré sans rien dépenser, `--force` régénère tout.
+Autre voix : `VOICE_ID=<id> node tools/generate-voice.mjs --force`.
+
 ## Ajouter ou modifier une démo
 
 Dans `js/lessons.js`, un cas décrit **l'état visé après la démo** (`base`, en gestes depuis
