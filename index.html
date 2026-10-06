@@ -5,9 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Cube Malin</title>
 <meta name="description" content="Apprendre à résoudre le Rubik's Cube pas à pas, en 3D, pour les enfants de 5 à 10 ans.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Baloo+2:wght@600;700;800&display=swap">
+<meta name="theme-color" content="#1b2140">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cube Malin">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/favicon.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="css/fonts.css">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -25,6 +30,11 @@
     <button class="voice" id="voice-toggle" aria-pressed="true" title="Lire les explications à voix haute">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path class="wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path class="mute" d="M16 9l6 6M22 9l-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       <span id="voice-label">Voix</span>
+    </button>
+    <button class="voice install-btn" id="install-open" title="Installer Cube Malin pour jouer sans internet">
+      <svg class="i-dl" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5v11m0 0l-4.5-4.5M12 14.5l4.5-4.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 15.5v3a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-3" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+      <svg class="i-ok" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span id="install-label">Télécharger</span>
     </button>
   </header>
 
@@ -177,6 +187,36 @@
   </main>
 </div>
 
+<!-- Installer / télécharger pour jouer sans internet -->
+<div class="sheet-backdrop" id="install-sheet" hidden>
+  <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="install-title">
+    <button class="sheet-close" id="install-close" aria-label="Fermer">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>
+    </button>
+    <svg class="mascot" viewBox="0 0 64 64" aria-hidden="true"><use href="#mascot"/></svg>
+    <h2 id="install-title">Cube Malin sans internet</h2>
+    <p class="sheet-lead" id="install-lead">Installe l’appli sur ce téléphone ou cette tablette. Ensuite elle marche partout, même dans une chambre sans wifi.</p>
+
+    <ol class="sheet-steps" id="install-steps">
+      <li class="sheet-step" id="step-files">
+        <p class="sheet-step-title">Télécharger le cube et les voix</p>
+        <div class="progress" aria-hidden="true"><span id="dl-bar"></span></div>
+        <p class="sheet-note" id="dl-status">Environ 13 Mo. À faire une seule fois, avec le wifi.</p>
+        <button class="btn primary" id="btn-download">Télécharger</button>
+      </li>
+      <li class="sheet-step" id="step-install">
+        <p class="sheet-step-title">Mettre l’icône sur l’écran d’accueil</p>
+        <p class="sheet-note" id="install-how"></p>
+        <button class="btn primary" id="btn-install" hidden>Installer l’appli</button>
+      </li>
+    </ol>
+
+    <p class="sheet-pc">Sur un ordinateur, tu peux aussi prendre la
+      <a href="https://github.com/clicnstart-cell/rubikscube/archive/refs/heads/main.zip">version PC (.zip, 13 Mo)</a> :
+      dézippe-la, puis double-clique sur <code>index.html</code>.</p>
+  </section>
+</div>
+
 <canvas class="confetti" id="confetti" aria-hidden="true"></canvas>
 
 <!-- La mascotte : un petit cube souriant -->
@@ -192,7 +232,7 @@
   </symbol>
 </svg>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="js/vendor/three.min.js"></script>
 <script src="js/cube.js"></script>
 <script src="js/lessons.js"></script>
 <script src="js/voice-files.js"></script>

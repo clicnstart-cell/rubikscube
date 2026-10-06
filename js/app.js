@@ -167,13 +167,13 @@
       var k = window.CubeLessons.voiceKey(text);
       return rec.keys.indexOf(k) !== -1 ? rec.dir + k + '.mp3' : null;
     },
-    /** Met en cache les prochaines phrases pour qu'elles partent sans attendre. */
+    /** Range sur l'appareil les prochaines phrases pour qu'elles partent sans attendre. */
     prefetch: function (texts) {
       var self = this;
       if (!this.on || !window.fetch) return;
       texts.slice(0, 6).forEach(function (t) {
         var url = self.recorded(t);
-        if (url) fetch(url).catch(function () { /* hors ligne : tant pis */ });
+        if (url) getVoiceFile(url).catch(function () { /* hors ligne : tant pis */ });
       });
     },
     say: function (text, force) {
@@ -190,6 +190,7 @@
       return new Promise(function (resolve) {
         var done = false;
         var timer = null;
+        var blobUrl = null;
         var finish = function () {
           if (done) return;
           done = true;
@@ -197,6 +198,7 @@
           a.onended = a.onerror = a.onplaying = a.onloadedmetadata = null;
           if (self.audioDone === finish) self.audioDone = null;
           try { a.pause(); } catch (e) { /* rien */ }
+          if (blobUrl) URL.revokeObjectURL(blobUrl);
           resolve();
         };
         self.audioDone = finish;
@@ -208,19 +210,32 @@
           timer = setTimeout(finish, (a.duration || 10) * 1000 + 2500);
         };
         timer = setTimeout(finish, 20000);
-        a.src = url;
-        var p;
-        try { p = a.play(); } catch (e) { p = Promise.reject(e); }
-        if (p && p.catch) {
-          p.catch(function () {
-            // Lecture refusée (navigateur strict) : on tente la synthèse vocale.
+        var start = function (src) {
+          if (done) return;
+          a.src = src;
+          var p;
+          try { p = a.play(); } catch (e) { p = Promise.reject(e); }
+          if (p && p.catch) {
+            p.catch(function () {
+              // Lecture refusée (navigateur strict) : on tente la synthèse vocale.
+              if (done) return;
+              done = true;
+              clearTimeout(timer);
+              self.audioDone = null;
+              self.sayTTS(text).then(resolve);
+            });
+          }
+        };
+        // Le fichier est lu depuis l'appareil quand il y est (marche sans internet,
+        // et évite les soucis de lecture en streaming de Safari) ; sinon on le lit en ligne.
+        getVoiceFile(url)
+          .then(function (res) { return res.blob(); })
+          .then(function (b) {
             if (done) return;
-            done = true;
-            clearTimeout(timer);
-            self.audioDone = null;
-            self.sayTTS(text).then(resolve);
-          });
-        }
+            blobUrl = URL.createObjectURL(b);
+            start(blobUrl);
+          })
+          .catch(function () { start(url); });
       });
     },
     sayTTS: function (text) {
@@ -812,10 +827,228 @@
   // ======================================================================
   // Démarrage
   // ======================================================================
-  window.cubeMalin = { view: view, state: state, voice: voice }; // pratique pour déboguer dans la console
+  // ======================================================================
+  // Hors ligne : service worker, téléchargement des voix, installation
+  // ======================================================================
+  var VOIX_CACHE = 'cube-malin-voix';   // même nom que dans sw.js
+  var ONLINE_URL = 'https://clicnstart-cell.github.io/rubikscube/';
+
+  function cacheOk() {
+    try { return 'caches' in window && location.protocol !== 'file:'; } catch (e) { return false; }
+  }
+
+  /** La phrase enregistrée, depuis l'appareil si elle y est (sinon téléchargée et rangée). */
+  function getVoiceFile(url) {
+    if (!cacheOk()) return Promise.reject(new Error('pas de cache'));
+    return caches.open(VOIX_CACHE).then(function (c) {
+      return c.match(url).then(function (hit) {
+        if (hit) return hit;
+        return fetch(url).then(function (res) {
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          return c.put(url, res.clone()).then(function () { return res; }, function () { return res; });
+        });
+      });
+    });
+  }
+
+  var offline = {
+    isFile: location.protocol === 'file:',
+    swSupported: 'serviceWorker' in navigator && location.protocol !== 'file:',
+    swActive: false,
+    deferred: null,          // invitation à installer (Chrome, Edge, Android)
+    installed: false,
+    cached: 0,
+    downloading: false,
+    failed: false,
+    standalone: function () {
+      return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+    },
+    platform: function () {
+      var ua = navigator.userAgent || '';
+      if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return 'ios';
+      if (/Android/.test(ua)) return 'android';
+      return 'desktop';
+    },
+    urls: function () {
+      var rec = window.CUBE_VOICE;
+      return rec ? rec.keys.map(function (k) { return rec.dir + k + '.mp3'; }) : [];
+    },
+    ready: function () {
+      if (this.isFile) return true;
+      return this.swActive && this.cached >= this.urls().length;
+    },
+    /** Compte les voix déjà sur l'appareil et efface celles qui ne servent plus. */
+    refresh: function () {
+      var self = this;
+      if (!cacheOk()) return Promise.resolve();
+      var wanted = {};
+      this.urls().forEach(function (u) { wanted[new URL(u, location.href).href] = true; });
+      return caches.open(VOIX_CACHE).then(function (c) {
+        return c.keys().then(function (reqs) {
+          var n = 0;
+          reqs.forEach(function (r) {
+            if (wanted[r.url]) n++;
+            else c.delete(r);
+          });
+          self.cached = n;
+        });
+      }).catch(function () { /* rien */ });
+    },
+    download: function () {
+      var self = this;
+      if (this.downloading || !cacheOk()) return Promise.resolve();
+      this.downloading = true;
+      this.failed = false;
+      // Demande au navigateur de ne pas effacer ces fichiers pour faire de la place.
+      try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { /* rien */ }
+      var urls = this.urls();
+      var queue = urls.slice();
+      var errors = 0;
+      paintInstall();
+      return caches.open(VOIX_CACHE).then(function (c) {
+        var worker = function () {
+          var u = queue.shift();
+          if (!u) return Promise.resolve();
+          return c.match(u)
+            .then(function (hit) {
+              if (hit) return;
+              return fetch(u).then(function (res) {
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                return c.put(u, res);
+              });
+            })
+            .catch(function () { errors++; })
+            .then(function () { return self.refresh(); })
+            .then(function () { paintInstall(); return worker(); });
+        };
+        return Promise.all([worker(), worker(), worker(), worker()]);
+      }).catch(function () { errors++; }).then(function () {
+        self.downloading = false;
+        self.failed = errors > 0;
+        return self.refresh();
+      }).then(paintInstall);
+    }
+  };
+
+  function paintInstall() {
+    var total = offline.urls().length;
+    var ready = offline.ready();
+    var btn = $('install-open');
+    btn.dataset.ready = String(ready);
+    $('install-label').textContent = ready ? 'Hors ligne' : 'Télécharger';
+    btn.title = ready ? 'Cube Malin marche sans internet sur cet appareil' : 'Installer Cube Malin pour jouer sans internet';
+
+    if (offline.isFile) {
+      $('install-lead').textContent = 'Tu utilises la version téléchargée : elle marche déjà sans internet. Rien d’autre à faire !';
+      $('install-steps').hidden = true;
+      return;
+    }
+
+    // Étape 1 : les fichiers
+    var stepFiles = $('step-files');
+    var status = $('dl-status');
+    var dl = $('btn-download');
+    $('dl-bar').style.width = (total ? Math.round(100 * offline.cached / total) : 0) + '%';
+    stepFiles.dataset.done = String(ready);
+    if (!offline.swSupported || !cacheOk()) {
+      status.innerHTML = 'Ce navigateur ne peut pas garder l’appli sur l’appareil. Ouvre <strong>' + ONLINE_URL + '</strong> dans Chrome ou Safari.';
+      dl.hidden = true;
+    } else if (ready) {
+      status.innerHTML = '<strong>Tout est sur l’appareil.</strong> Cube Malin marche sans internet.';
+      dl.hidden = true;
+    } else if (offline.downloading) {
+      status.textContent = 'Téléchargement… ' + offline.cached + ' voix sur ' + total + '. Garde la page ouverte.';
+      dl.hidden = true;
+    } else {
+      // Quelques voix sont déjà là (celles écoutées) : on n'en parle qu'à partir d'un vrai début.
+      var started = offline.cached >= total / 4;
+      status.textContent = offline.failed
+        ? 'Le téléchargement s’est arrêté (connexion coupée ?). ' + offline.cached + ' voix sur ' + total + '. Réessaie avec le wifi.'
+        : 'Environ 13 Mo. À faire une seule fois, avec le wifi.' + (started ? ' Déjà ' + offline.cached + ' voix sur ' + total + '.' : '');
+      dl.hidden = false;
+      dl.textContent = offline.failed || started ? 'Continuer le téléchargement' : 'Télécharger';
+    }
+
+    // Étape 2 : l'icône
+    var how = $('install-how');
+    var inst = $('btn-install');
+    var isInstalled = offline.installed || offline.standalone();
+    $('step-install').dataset.done = String(isInstalled);
+    inst.hidden = true;
+    if (isInstalled) {
+      how.innerHTML = '<strong>C’est fait :</strong> l’appli est installée sur cet appareil.';
+    } else if (offline.deferred) {
+      how.textContent = 'Appuie sur le bouton : l’icône Cube Malin apparaît avec tes autres applis.';
+      inst.hidden = false;
+    } else if (offline.platform() === 'ios') {
+      how.innerHTML = 'Dans <strong>Safari</strong>, touche le bouton <strong>Partager</strong> (le carré avec une flèche vers le haut), puis <strong>« Sur l’écran d’accueil »</strong>.';
+    } else if (offline.platform() === 'android') {
+      how.innerHTML = 'Ouvre le menu du navigateur (les <strong>3 points</strong> en haut à droite), puis <strong>« Installer l’application »</strong> ou <strong>« Ajouter à l’écran d’accueil »</strong>.';
+    } else {
+      how.innerHTML = 'Dans <strong>Chrome</strong> ou <strong>Edge</strong>, clique sur l’icône d’installation à droite de la barre d’adresse. Sinon, garde simplement cette page dans tes favoris.';
+    }
+  }
+
+  var sheetReturn = null;
+  function openInstall() {
+    sheetReturn = document.activeElement;
+    $('install-sheet').hidden = false;
+    paintInstall();
+    offline.refresh().then(paintInstall);
+    $('install-close').focus();
+  }
+  function closeInstall() {
+    $('install-sheet').hidden = true;
+    if (sheetReturn && sheetReturn.focus) sheetReturn.focus();
+  }
+  $('install-open').addEventListener('click', openInstall);
+  $('install-close').addEventListener('click', closeInstall);
+  $('install-sheet').addEventListener('click', function (e) { if (e.target === $('install-sheet')) closeInstall(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('install-sheet').hidden) closeInstall(); });
+  $('btn-download').addEventListener('click', function () { offline.download(); });
+  $('btn-install').addEventListener('click', function () {
+    var d = offline.deferred;
+    if (!d) return;
+    offline.deferred = null;
+    d.prompt();
+    (d.userChoice || Promise.resolve({})).then(function (r) {
+      if (r && r.outcome === 'accepted') offline.installed = true;
+      paintInstall();
+    });
+  });
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();          // on garde l'invitation pour notre propre bouton
+    offline.deferred = e;
+    paintInstall();
+  });
+  window.addEventListener('appinstalled', function () {
+    offline.installed = true;
+    offline.deferred = null;
+    paintInstall();
+    offline.download();          // l'appli installée doit marcher sans internet
+  });
+
+  if (offline.swSupported) {
+    navigator.serviceWorker.register('sw.js').then(function (reg) {
+      return navigator.serviceWorker.ready.then(function () {
+        offline.swActive = !!(reg.active || navigator.serviceWorker.controller);
+        return offline.refresh();
+      });
+    }).then(function () {
+      paintInstall();
+      // Lancée depuis l'icône : on complète les voix manquantes sans rien demander.
+      if (offline.standalone() && !offline.ready()) offline.download();
+    }).catch(function () {
+      offline.swSupported = false;
+      paintInstall();
+    });
+  }
+
+  window.cubeMalin = { view: view, state: state, voice: voice, offline: offline }; // pratique pour déboguer dans la console
 
   renderPad();
   paintVoice();
+  paintInstall();
   setSpeed(state.speed);
   selectLesson(state.li, 0);
 })();
